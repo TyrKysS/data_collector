@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="./">
+    <title>Data Collector</title>
+    <style>
+        :root {
+            --primary: #03a9f4;
+            --primary-dark: #0288d1;
+            --bg: #f0f4f8;
+            --surface: #ffffff;
+            --border: #e0e0e0;
+            --text: #212121;
+            --muted: #757575;
+            --green: #4caf50;
+            --red: #f44336;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 6px rgba(0,0,0,.2);
+        }
+        header h1 { font-size: 1.15rem; font-weight: 500; }
+        .status-badge { display: flex; align-items: center; gap: 7px; font-size: .85rem; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,.4); flex-shrink: 0; }
+        .dot.active { background: #69f0ae; box-shadow: 0 0 0 3px rgba(105,240,174,.3); }
+
+        /* Layout */
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 14px;
+            padding: 14px;
+            max-width: 1080px;
+            margin: 0 auto;
+        }
+        @media (max-width: 680px) { .main { grid-template-columns: 1fr; } }
+
+        /* Card */
+        .card {
+            background: var(--surface);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.08);
+            overflow: hidden;
+        }
+        .card-header {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            font-size: .78rem;
+            font-weight: 700;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .6px;
+        }
+
+        /* Entity browser */
+        .search-wrap { padding: 9px 14px; border-bottom: 1px solid var(--border); }
+        .search-wrap input {
+            width: 100%;
+            padding: 7px 11px;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            font-size: .88rem;
+            outline: none;
+            transition: border-color .15s;
+        }
+        .search-wrap input:focus { border-color: var(--primary); }
+
+        .entity-list { height: 420px; overflow-y: auto; }
+        .entity-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 14px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            transition: background .12s;
+            user-select: none;
+            gap: 10px;
+        }
+        .entity-item:last-child { border-bottom: none; }
+        .entity-item:hover { background: #f0f8ff; }
+        .entity-item.selected { background: #e3f2fd; }
+
+        .checkbox {
+            width: 17px; height: 17px;
+            border-radius: 3px;
+            border: 2px solid var(--border);
+            flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            transition: background .12s, border-color .12s;
+        }
+        .entity-item.selected .checkbox {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+        .entity-item.selected .checkbox::after { content: '✓'; color: white; font-size: 11px; line-height: 1; }
+
+        .einfo { min-width: 0; flex: 1; }
+        .ename { font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .eid { font-size: .72rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .estate {
+            font-size: .72rem;
+            color: var(--muted);
+            background: var(--bg);
+            padding: 2px 7px;
+            border-radius: 10px;
+            flex-shrink: 0;
+            max-width: 80px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Right panel */
+        .right { display: flex; flex-direction: column; gap: 14px; }
+
+        .sel-list { min-height: 48px; max-height: 180px; overflow-y: auto; }
+        .sel-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 14px;
+            border-bottom: 1px solid var(--border);
+            font-size: .84rem;
+            gap: 8px;
+        }
+        .sel-item:last-child { border-bottom: none; }
+        .sel-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+        .rm { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.1rem; padding: 0 3px; line-height: 1; flex-shrink: 0; }
+        .rm:hover { color: var(--red); }
+
+        /* Settings */
+        .settings-body { padding: 14px; }
+        .field { margin-bottom: 13px; }
+        .field label { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 5px; }
+        .field input[type=number] {
+            width: 100%;
+            padding: 8px 11px;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            font-size: .9rem;
+            outline: none;
+            transition: border-color .15s;
+        }
+        .field input:focus { border-color: var(--primary); }
+        .hint { font-size: .73rem; color: var(--muted); margin-top: 3px; }
+
+        .apply-btn {
+            width: 100%;
+            padding: 9px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: .92rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background .15s;
+        }
+        .apply-btn:hover { background: var(--primary-dark); }
+        .apply-btn:disabled { background: #bbb; cursor: default; }
+
+        /* Stats */
+        .stats { display: flex; gap: 8px; }
+        .stat {
+            flex: 1;
+            background: var(--surface);
+            border-radius: 8px;
+            padding: 11px 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.08);
+            text-align: center;
+        }
+        .stat .val { font-size: 1.2rem; font-weight: 700; color: var(--primary); }
+        .stat .lbl { font-size: .7rem; color: var(--muted); margin-top: 2px; }
+
+        /* Action buttons */
+        .actions { display: flex; gap: 8px; }
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            font-size: .9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity .15s;
+        }
+        .btn:hover { opacity: .88; }
+        .btn-dl { background: var(--green); color: white; }
+        .btn-cl { background: var(--red); color: white; }
+
+        /* Empty state */
+        .empty { padding: 18px 14px; text-align: center; color: var(--muted); font-size: .84rem; }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 20px; right: 20px;
+            background: #323232; color: white;
+            padding: 10px 16px; border-radius: 5px;
+            font-size: .88rem; opacity: 0;
+            transition: opacity .25s; z-index: 999;
+            pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Data Collector</h1>
+    <div class="status-badge">
+        <div class="dot" id="dot"></div>
+        <span id="status-text">Loading…</span>
+    </div>
+</header>
+
+<div class="main">
+    <!-- Left: entity browser -->
+    <div class="card">
+        <div class="card-header">Entities</div>
+        <div class="search-wrap">
+            <input type="text" id="search" placeholder="Search by name or entity ID…">
+        </div>
+        <div class="entity-list" id="entity-list">
+            <div class="empty">Loading entities…</div>
+        </div>
+    </div>
+
+    <!-- Right panel -->
+    <div class="right">
+
+        <!-- Selected entities -->
+        <div class="card">
+            <div class="card-header">Selected (<span id="sel-count">0</span>)</div>
+            <div class="sel-list" id="sel-list">
+                <div class="empty">No entities selected</div>
+            </div>
+        </div>
+
+        <!-- Interval + apply -->
+        <div class="card">
+            <div class="card-header">Settings</div>
+            <div class="settings-body">
+                <div class="field">
+                    <label>Interval (seconds)</label>
+                    <input type="number" id="interval" value="60" min="10" max="86400">
+                    <div class="hint">How often to sample entity states (min 10 s)</div>
+                </div>
+                <button class="apply-btn" id="apply-btn" onclick="saveConfig()">Apply Settings</button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats">
+            <div class="stat"><div class="val" id="s-rows">—</div><div class="lbl">Rows</div></div>
+            <div class="stat"><div class="val" id="s-size">—</div><div class="lbl">File size</div></div>
+            <div class="stat"><div class="val" id="s-free">—</div><div class="lbl">Disk free</div></div>
+        </div>
+
+        <!-- Download / Clear -->
+        <div class="actions">
+            <button class="btn btn-dl" onclick="downloadCSV()">Download CSV</button>
+            <button class="btn btn-cl" onclick="clearData()">Clear Data</button>
+        </div>
+
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let allEntities = [];
+let selectedIds = new Set();
+
+/* ── helpers ─────────────────────────────────────────── */
+
+function esc(s) {
+    return String(s ?? '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtBytes(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1 << 20) return (b / 1024).toFixed(1) + ' KB';
+    if (b < 1 << 30) return (b / (1 << 20)).toFixed(1) + ' MB';
+    return (b / (1 << 30)).toFixed(1) + ' GB';
+}
+
+function fmtNum(n) { return Number(n).toLocaleString(); }
+
+let toastTimer;
+function toast(msg, ms = 2500) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+/* ── entity list ─────────────────────────────────────── */
+
+async function loadEntities() {
+    const list = document.getElementById('entity-list');
+    try {
+        const r = await fetch('api/entities');
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        allEntities = await r.json();
+        renderEntities();
+    } catch (e) {
+        list.innerHTML = `<div class="empty">Could not load entities: ${esc(e.message)}</div>`;
+    }
+}
+
+function renderEntities() {
+    const q = document.getElementById('search').value.toLowerCase();
+    const list = document.getElementById('entity-list');
+    const filtered = allEntities.filter(e =>
+        e.id.toLowerCase().includes(q) || (e.name || '').toLowerCase().includes(q)
+    );
+    if (!filtered.length) {
+        list.innerHTML = '<div class="empty">No entities found</div>';
+        return;
+    }
+    list.innerHTML = filtered.map(e => `
+        <div class="entity-item${selectedIds.has(e.id) ? ' selected' : ''}" data-id="${esc(e.id)}">
+            <div class="checkbox"></div>
+            <div class="einfo">
+                <div class="ename">${esc(e.name || e.id)}</div>
+                <div class="eid">${esc(e.id)}</div>
+            </div>
+            <div class="estate" title="${esc(e.state)}">${esc(e.state)}</div>
+        </div>`).join('');
+}
+
+document.getElementById('entity-list').addEventListener('click', e => {
+    const item = e.target.closest('.entity-item');
+    if (!item) return;
+    const id = item.dataset.id;
+    selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id);
+    renderEntities();
+    renderSelected();
+});
+
+document.getElementById('search').addEventListener('input', renderEntities);
+
+/* ── selected list ───────────────────────────────────── */
+
+function renderSelected() {
+    document.getElementById('sel-count').textContent = selectedIds.size;
+    const list = document.getElementById('sel-list');
+    if (!selectedIds.size) {
+        list.innerHTML = '<div class="empty">No entities selected</div>';
+        return;
+    }
+    list.innerHTML = [...selectedIds].map(id => {
+        const e = allEntities.find(x => x.id === id);
+        const name = e ? (e.name || id) : id;
+        return `<div class="sel-item">
+            <span title="${esc(id)}">${esc(name)}</span>
+            <button class="rm" data-id="${esc(id)}" title="Remove">×</button>
+        </div>`;
+    }).join('');
+}
+
+document.getElementById('sel-list').addEventListener('click', e => {
+    if (e.target.classList.contains('rm')) {
+        selectedIds.delete(e.target.dataset.id);
+        renderEntities();
+        renderSelected();
+    }
+});
+
+/* ── config ──────────────────────────────────────────── */
+
+async function loadConfig() {
+    try {
+        const r = await fetch('api/config');
+        const d = await r.json();
+        selectedIds = new Set(d.entities);
+        document.getElementById('interval').value = d.interval;
+        renderEntities();
+        renderSelected();
+        setBadge(d.logging);
+    } catch (e) { console.error('loadConfig', e); }
+}
+
+async function saveConfig() {
+    const btn = document.getElementById('apply-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+        const r = await fetch('api/config', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                entities: [...selectedIds],
+                interval: parseInt(document.getElementById('interval').value) || 60
+            })
+        });
+        const d = await r.json();
+        if (d.ok) { toast('Settings saved'); loadStatus(); }
+        else toast('Save failed');
+    } catch (e) { toast('Error: ' + e.message); }
+    finally { btn.disabled = false; btn.textContent = 'Apply Settings'; }
+}
+
+/* ── status ──────────────────────────────────────────── */
+
+async function loadStatus() {
+    try {
+        const r = await fetch('api/status');
+        const d = await r.json();
+        document.getElementById('s-rows').textContent = fmtNum(d.rows);
+        document.getElementById('s-size').textContent = fmtBytes(d.size_bytes);
+        document.getElementById('s-free').textContent = fmtBytes(d.free_bytes);
+        setBadge(d.logging);
+    } catch (e) { console.error('loadStatus', e); }
+}
+
+function setBadge(active) {
+    document.getElementById('dot').className = 'dot' + (active ? ' active' : '');
+    document.getElementById('status-text').textContent = active ? 'Logging active' : 'Not logging';
+}
+
+/* ── actions ─────────────────────────────────────────── */
+
+function downloadCSV() { window.location.href = 'download'; }
+
+async function clearData() {
+    if (!confirm('Delete all logged data? This cannot be undone.')) return;
+    try {
+        const r = await fetch('api/clear', { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) { toast('Data cleared'); loadStatus(); }
+    } catch (e) { toast('Error: ' + e.message); }
+}
+
+/* ── init ────────────────────────────────────────────── */
+
+(async () => {
+    await loadEntities();
+    await loadConfig();
+    await loadStatus();
+})();
+
+setInterval(loadStatus, 15000);
+</script>
+
+</body>
+</html>
